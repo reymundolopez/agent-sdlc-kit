@@ -1,0 +1,9 @@
+id: no-dotenv-import
+language: tsx
+rule:
+  any:
+    - pattern: import $X from 'dotenv'
+    - pattern: import 'dotenv/config'
+    - pattern: require('dotenv')
+severity: error
+message: "Zero-.env mandate: dotenv imports are prohibited. Secrets are injected at runtime via Infisical and Varlock."

@@ -1,0 +1,217 @@
+#!/usr/bin/env node
+/**
+ * `bv` — Deterministic Agent SDLC Toolkit CLI
+ * Zero runtime LLM dependencies. Enforces one-verb deterministic execution,
+ * working-tree hash caching, true TDD locking, and <=40-line JSON outputs.
+ */
+
+import { resolveContext, emitResult } from '../lib/core.mjs';
+import {
+  VERB_DOCS,
+  printVerbHelp,
+  cmdVerbs,
+  cmdReadIssue,
+  cmdStartIssue,
+  cmdReadSpec,
+  cmdSetPhase,
+  cmdPostComment,
+  cmdSearch,
+  cmdOutline,
+  cmdReadSlice,
+  cmdReadDiff,
+  cmdReviewStatic,
+  cmdWriteRed,
+  cmdGateGreen,
+  cmdCheckScope,
+  cmdLintTypes,
+  cmdRestoreArtifacts,
+  cmdVerify,
+  cmdCaptureProof,
+  cmdManualCheck,
+  cmdPrepush,
+  cmdShip,
+  cmdWatchCi,
+  cmdVpsStatus,
+  cmdVerifyProd,
+  cmdCloseIssue,
+  cmdBlockIssue,
+  cmdDbUp,
+  cmdSecretsRun,
+  cmdLedger,
+  cmdDoctor,
+  cmdTelemetryReport,
+  cmdRunIssue
+} from '../lib/verbs.mjs';
+import {
+  readStdinJson,
+  evaluateSessionStart,
+  evaluatePreToolUse,
+  evaluatePostToolUse,
+  evaluatePreInvocation,
+  evaluateStop
+} from '../lib/hooks.mjs';
+
+const args = process.argv.slice(2);
+const verb = args[0];
+const restArgs = args.slice(1);
+
+if (!verb || verb === '--help' || verb === '-h' || verb === 'help') {
+  if (restArgs[0] && VERB_DOCS[restArgs[0]]) {
+    printVerbHelp(restArgs[0]);
+  }
+  const lines = [
+    'bv <verb> [args] — Deterministic Agent SDLC CLI (agent-sdlc-kit)',
+    'Exit codes: 0=ok | 2=failed (retryable) | 3=blocked (human) | 4=misuse',
+    '',
+    'Verbs:'
+  ];
+  for (const [k, v] of Object.entries(VERB_DOCS)) {
+    lines.push(`  bv ${k.padEnd(17)} ${v.summary.slice(0, 68)}`);
+  }
+  console.log(lines.join('\n'));
+  process.exit(0);
+}
+
+// Subcommand `bv hook <event>` for lifecycle hooks
+if (verb === 'hook') {
+  const hookEvent = restArgs[0];
+  const payload = await readStdinJson();
+  let out = {};
+  if (hookEvent === 'session-start') out = evaluateSessionStart(payload);
+  else if (hookEvent === 'pre-tool-use') out = evaluatePreToolUse(payload);
+  else if (hookEvent === 'post-tool-use') out = evaluatePostToolUse(payload);
+  else if (hookEvent === 'pre-invocation') out = evaluatePreInvocation(payload);
+  else if (hookEvent === 'stop') out = evaluateStop(payload);
+  process.stdout.write(JSON.stringify(out) + '\n');
+  process.exit(0);
+}
+
+if (restArgs.includes('--help') || restArgs.includes('-h')) {
+  printVerbHelp(verb);
+}
+
+const ctx = resolveContext(process.cwd());
+
+try {
+  switch (verb) {
+    case 'verbs':
+      await cmdVerbs();
+      break;
+    case 'run-issue':
+      await cmdRunIssue(ctx, restArgs);
+      break;
+    case 'read-issue':
+      await cmdReadIssue(ctx, restArgs);
+      break;
+    case 'start-issue':
+      await cmdStartIssue(ctx, restArgs);
+      break;
+    case 'read-spec':
+      await cmdReadSpec(ctx, restArgs);
+      break;
+    case 'set-phase':
+      await cmdSetPhase(ctx, restArgs);
+      break;
+    case 'post-comment':
+      await cmdPostComment(ctx, restArgs);
+      break;
+    case 'search':
+      await cmdSearch(ctx, restArgs);
+      break;
+    case 'outline':
+      await cmdOutline(ctx, restArgs);
+      break;
+    case 'read-slice':
+    case 'slice':
+      await cmdReadSlice(ctx, restArgs);
+      break;
+    case 'read-diff':
+      await cmdReadDiff(ctx, restArgs);
+      break;
+    case 'review-static':
+      await cmdReviewStatic(ctx, restArgs);
+      break;
+    case 'write-red':
+    case 'gate-red':
+      await cmdWriteRed(ctx, restArgs);
+      break;
+    case 'gate-green':
+      await cmdGateGreen(ctx, restArgs);
+      break;
+    case 'check-scope':
+      await cmdCheckScope(ctx, restArgs);
+      break;
+    case 'lint-types':
+      await cmdLintTypes(ctx, restArgs);
+      break;
+    case 'verify':
+    case 'verify-all':
+      await cmdVerify(ctx, restArgs);
+      break;
+    case 'capture-proof':
+    case 'proof':
+      await cmdCaptureProof(ctx, restArgs);
+      break;
+    case 'manual-check':
+      await cmdManualCheck(ctx, restArgs);
+      break;
+    case 'prepush':
+      await cmdPrepush(ctx, restArgs);
+      break;
+    case 'ship':
+      await cmdShip(ctx, restArgs);
+      break;
+    case 'watch-ci':
+    case 'ci-watch':
+      await cmdWatchCi(ctx, restArgs);
+      break;
+    case 'vps-status':
+      await cmdVpsStatus(ctx, restArgs);
+      break;
+    case 'verify-prod':
+      await cmdVerifyProd(ctx, restArgs);
+      break;
+    case 'close-issue':
+      await cmdCloseIssue(ctx, restArgs);
+      break;
+    case 'block-issue':
+      await cmdBlockIssue(ctx, restArgs);
+      break;
+    case 'restore-artifacts':
+      await cmdRestoreArtifacts(ctx);
+      break;
+    case 'db-up':
+      await cmdDbUp(ctx, restArgs);
+      break;
+    case 'secrets-run':
+      await cmdSecretsRun(ctx, restArgs);
+      break;
+    case 'ledger':
+      await cmdLedger(ctx, restArgs);
+      break;
+    case 'doctor':
+      await cmdDoctor(ctx);
+      break;
+    case 'telemetry-report':
+      await cmdTelemetryReport(ctx);
+      break;
+    default:
+      emitResult(
+        {
+          ok: false,
+          summary: `Unknown verb '${verb}'. Run 'bv verbs' or 'bv --help' to list supported commands.`,
+          next: 'bv verbs'
+        },
+        4
+      );
+  }
+} catch (err) {
+  emitResult(
+    {
+      ok: false,
+      summary: `Unexpected error in 'bv ${verb}': ${err?.message || String(err)}`,
+      next: 'bv doctor'
+    },
+    2
+  );
+}

@@ -1,0 +1,8 @@
+id: no-explicit-any
+language: tsx
+rule:
+  any:
+    - pattern: $X as any
+    - pattern: ": any"
+severity: error
+message: "Explicit 'any' type is forbidden by style guide. Use a strict type or 'unknown' with type narrowing."

@@ -1,0 +1,12 @@
+{
+  "name": "agent-sdlc-kit",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Deterministic agent SDLC pipeline for Antigravity CLI",
+  "bin": {
+    "bv": "./bin/bv"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

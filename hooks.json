@@ -1,0 +1,70 @@
+{
+  "agent-sdlc-kit": {
+    "enabled": true,
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node ./scripts/hooks/session-start.mjs",
+        "timeout": 10
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/pre-tool-use.mjs",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "read_file|view_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/pre-tool-use.mjs",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "edit_file|write_file|replace_file_content|write_to_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/pre-tool-use.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hooks/post-tool-use.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node ./scripts/hooks/pre-invocation.mjs",
+        "timeout": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./scripts/hooks/stop.mjs",
+        "timeout": 10
+      }
+    ]
+  }
+}

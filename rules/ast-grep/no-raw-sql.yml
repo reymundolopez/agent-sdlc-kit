@@ -1,0 +1,8 @@
+id: no-raw-sql
+language: tsx
+rule:
+  any:
+    - pattern: $PRISMA.$queryRawUnsafe($$$)
+    - pattern: $PRISMA.$executeRawUnsafe($$$)
+severity: error
+message: "Unsafe raw SQL queries ($queryRawUnsafe / $executeRawUnsafe) are prohibited. Use Prisma model methods or parameterized queries."

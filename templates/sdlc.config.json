@@ -1,0 +1,72 @@
+{
+  "repos": {
+    "backlog": "reymundolopez/bv-blueprint",
+    "code": "bv-ososapp"
+  },
+  "phases": [
+    {
+      "id": "intake",
+      "mode": "deterministic",
+      "verbs": ["start-issue", "read-issue", "read-slice"],
+      "exit": "file:.bv/packets/${ISSUE}/red.md"
+    },
+    {
+      "id": "red",
+      "mode": "llm",
+      "role": "qa",
+      "model": "flash",
+      "verbs": ["search", "outline", "write-red"],
+      "maxTurns": 20,
+      "exit": "ledger:red"
+    },
+    {
+      "id": "code",
+      "mode": "llm",
+      "role": "coder",
+      "model": "flash",
+      "verbs": ["search", "outline", "read-slice", "gate-green", "check-scope", "lint-types"],
+      "maxTurns": 60,
+      "exit": "ledger:green"
+    },
+    {
+      "id": "review",
+      "mode": "deterministic",
+      "verbs": ["review-static", "post-comment"],
+      "exit": "ledger:review"
+    },
+    {
+      "id": "verify",
+      "mode": "deterministic",
+      "verbs": ["verify", "capture-proof", "manual-check", "post-comment"],
+      "exit": "ledger:verify"
+    },
+    {
+      "id": "ship",
+      "mode": "deterministic",
+      "verbs": ["prepush", "ship", "watch-ci", "verify-prod", "close-issue"],
+      "exit": "ledger:pr"
+    }
+  ],
+  "optionalLlmPhases": {
+    "spec": {
+      "role": "product",
+      "model": "flash",
+      "maxTurns": 15,
+      "exit": "comment:product"
+    },
+    "design": {
+      "role": "architect",
+      "model": "flash",
+      "maxTurns": 20,
+      "exit": "file:.context/blueprints/${ID}.md"
+    },
+    "deepReview": {
+      "role": "reviewer",
+      "model": "flash",
+      "maxTurns": 15,
+      "exit": "comment:review"
+    }
+  },
+  "maxAttempts": 5,
+  "identicalFailureLimit": 2
+}

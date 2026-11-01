@@ -1,0 +1,12 @@
+{
+  "name": "agent-sdlc-kit",
+  "displayName": "Agent SDLC Kit",
+  "description": "Deterministic agent pipeline: one-verb skills, hook-enforced roles & permissions, state ledger, true TDD, zero-.env secrets.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Reymundo Lopez",
+    "url": "https://github.com/reymundolopez"
+  },
+  "repository": "https://github.com/reymundolopez/agent-sdlc-kit",
+  "license": "MIT"
+}

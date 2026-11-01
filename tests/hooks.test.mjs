@@ -1,0 +1,331 @@
+import { describe, it, before, after } from 'node:test';
+import assert from 'node:assert';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import {
+  evaluateSessionStart,
+  evaluatePreToolUse,
+  evaluatePostToolUse,
+  evaluatePreInvocation,
+  evaluateStop
+} from '../lib/hooks.mjs';
+import { computeFileBlobHash } from '../lib/core.mjs';
+
+describe('agent-sdlc-kit Hook Enforcement & TDD Unit Suite', () => {
+  let tmpWorkspace;
+
+  before(() => {
+    tmpWorkspace = mkdtempSync(join(tmpdir(), 'bv-hooks-test-'));
+    mkdirSync(join(tmpWorkspace, '.agents'), { recursive: true });
+    mkdirSync(join(tmpWorkspace, '.bv', 'state'), { recursive: true });
+    mkdirSync(join(tmpWorkspace, 'apps', 'backend', 'src'), { recursive: true });
+    writeFileSync(
+      join(tmpWorkspace, 'package.json'),
+      JSON.stringify({ name: 'test-repo', version: '1.0.0' }),
+      'utf8'
+    );
+    writeFileSync(
+      join(tmpWorkspace, '.agents', 'sdlc.config.json'),
+      readFileSync(new URL('../templates/sdlc.config.json', import.meta.url), 'utf8'),
+      'utf8'
+    );
+  });
+
+  after(() => {
+    rmSync(tmpWorkspace, { recursive: true, force: true });
+  });
+
+  it('Always-On Security Denies: blocks ssh, mysql, pm2, sudo, printenv, env, and .env* across ALL sessions', () => {
+    const forbiddenCommands = [
+      'ssh linode "mysql -D osos_db"',
+      'mysql -u root -p',
+      'pm2 restart bv-backend',
+      'sudo rm -rf /tmp/x',
+      'printenv',
+      'env',
+      'cat .env.local',
+      'cat apps/backend/.env',
+      'infisical secrets get ADMIN_PASSWORD',
+      'cat ~/.bv-admin-env',
+      'bv ledger && bv verify'
+    ];
+
+    for (const cmd of forbiddenCommands) {
+      const res = evaluatePreToolUse(
+        {
+          conversationId: 'adhoc-chat-1',
+          workspacePaths: [tmpWorkspace],
+          toolCall: { name: 'run_command', args: { CommandLine: cmd } }
+        },
+        tmpWorkspace
+      );
+      assert.strictEqual(res.decision, 'deny', `Expected command "${cmd}" to be denied`);
+      assert.ok(res.reason && res.reason.includes('SECURITY DENY'), `Expected SECURITY DENY reason for "${cmd}"`);
+    }
+  });
+
+  it('Always-On File Security Denies: blocks reading/writing .env* (except .env.schema) on both CLI and IDE tool names', () => {
+    for (const tool of ['read_file', 'view_file', 'edit_file', 'write_file', 'replace_file_content', 'write_to_file']) {
+      const badEnvRes = evaluatePreToolUse(
+        {
+          conversationId: 'adhoc-chat-2',
+          workspacePaths: [tmpWorkspace],
+          toolCall: { name: tool, args: { Path: '.env.local', AbsolutePath: '/tmp/.env.local' } }
+        },
+        tmpWorkspace
+      );
+      assert.strictEqual(badEnvRes.decision, 'deny', `Expected ${tool} on .env.local to be denied`);
+
+      const schemaAllowedRes = evaluatePreToolUse(
+        {
+          conversationId: 'adhoc-chat-2',
+          workspacePaths: [tmpWorkspace],
+          toolCall: { name: tool, args: { Path: '.env.schema', AbsolutePath: join(tmpWorkspace, '.env.schema') } }
+        },
+        tmpWorkspace
+      );
+      assert.strictEqual(schemaAllowedRes.decision, 'allow', `Expected ${tool} on .env.schema to be allowed`);
+    }
+  });
+
+  it('Interactive Chat Safety Scoping: normal ad-hoc chats get 0 tokens on SessionStart and are not locked by SDLC role rules', () => {
+    const startRes = evaluateSessionStart(
+      {
+        conversationId: 'normal-user-chat',
+        workspacePaths: [tmpWorkspace]
+      },
+      tmpWorkspace
+    );
+    assert.deepStrictEqual(startRes, {}, 'Ad-hoc chat SessionStart must return {} (0 tokens)');
+
+    const stopRes = evaluateStop(
+      {
+        conversationId: 'normal-user-chat',
+        workspacePaths: [tmpWorkspace],
+        terminationReason: 'NO_TOOL_CALL'
+      },
+      tmpWorkspace
+    );
+    assert.deepStrictEqual(stopRes, {}, 'Ad-hoc chat Stop must never block');
+  });
+
+  it('Active SDLC Session: enforces >200 line read guard, duplicate read guard, QA vs Coder path locks, and Stop continuation', () => {
+    const sdlcConvId = 'sdlc-conv-99';
+    const lockedTestRel = 'verify-issue-099.test.mjs';
+    const lockedTestFull = join(tmpWorkspace, lockedTestRel);
+    writeFileSync(lockedTestFull, '// locked test\nprocess.exit(1);\n', 'utf8');
+    const lockedBlob = computeFileBlobHash(lockedTestFull);
+
+    // Create a 250-line source file
+    const bigFileRel = 'apps/backend/src/big.service.ts';
+    const bigFileFull = join(tmpWorkspace, bigFileRel);
+    writeFileSync(
+      bigFileFull,
+      Array.from({ length: 250 }, (_, i) => `export const line${i + 1} = ${i + 1};`).join('\n'),
+      'utf8'
+    );
+
+    // Activate issue 99 in RED phase first
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', 'ACTIVE_ISSUE'),
+      JSON.stringify({ issue: 99, activeConversationId: sdlcConvId, phase: 'red' }),
+      'utf8'
+    );
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', 'ISSUE-99.json'),
+      JSON.stringify({
+        issue: 99,
+        id: 'ISSUE-099',
+        branch: 'feature/issue-099',
+        phase: 'red',
+        activeConversationId: sdlcConvId,
+        attempts: {},
+        failureHashes: {},
+        red: null,
+        green: null
+      }),
+      'utf8'
+    );
+
+    // 1. SessionStart injects <= 1.5 KB brief
+    const ssRes = evaluateSessionStart({ conversationId: sdlcConvId, workspacePaths: [tmpWorkspace] }, tmpWorkspace);
+    const msg = ssRes.injectSteps?.[0]?.systemMessage?.systemMessage || '';
+    assert.ok(msg.includes('Role: qa') && msg.includes('ISSUE-099'), 'SessionStart injects role brief');
+    assert.ok(Buffer.byteLength(msg, 'utf8') <= 1536, 'SessionStart brief is <= 1.5 KB');
+
+    // 2. QA in RED phase cannot edit apps/backend/src/big.service.ts
+    const qaEditSrc = evaluatePreToolUse(
+      {
+        conversationId: sdlcConvId,
+        workspacePaths: [tmpWorkspace],
+        toolCall: { name: 'edit_file', args: { Path: bigFileRel } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(qaEditSrc.decision, 'deny', 'QA must be denied editing source files');
+
+    // QA CAN edit verify-issue-099.test.mjs
+    const qaEditTest = evaluatePreToolUse(
+      {
+        conversationId: sdlcConvId,
+        workspacePaths: [tmpWorkspace],
+        toolCall: { name: 'edit_file', args: { Path: lockedTestRel } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(qaEditTest.decision, 'allow', 'QA is allowed to edit test files in RED phase');
+
+    // 3. Transition to CODE phase with locked RED test
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', 'ISSUE-99.json'),
+      JSON.stringify({
+        issue: 99,
+        id: 'ISSUE-099',
+        branch: 'feature/issue-099',
+        phase: 'code',
+        activeConversationId: sdlcConvId,
+        attempts: {},
+        failureHashes: {},
+        red: {
+          tests: [lockedTestRel],
+          blobHashes: { [lockedTestRel]: lockedBlob },
+          treeHash: 'abc1234',
+          failing: 1
+        },
+        green: null
+      }),
+      'utf8'
+    );
+
+    // Coder cannot edit locked RED test (tested with both CLI edit_file and IDE replace_file_content)
+    for (const editTool of ['edit_file', 'replace_file_content']) {
+      const coderEditLocked = evaluatePreToolUse(
+        {
+          conversationId: sdlcConvId,
+          workspacePaths: [tmpWorkspace],
+          toolCall: { name: editTool, args: { Path: lockedTestRel, TargetFile: lockedTestFull } }
+        },
+        tmpWorkspace
+      );
+      assert.strictEqual(coderEditLocked.decision, 'deny', `Coder must be denied editing locked RED test via ${editTool}`);
+      assert.ok(coderEditLocked.reason.includes('locked RED test'));
+    }
+
+    // Coder CAN edit apps/backend/src/big.service.ts
+    const coderEditSrc = evaluatePreToolUse(
+      {
+        conversationId: sdlcConvId,
+        workspacePaths: [tmpWorkspace],
+        toolCall: { name: 'edit_file', args: { Path: bigFileRel } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(coderEditSrc.decision, 'allow', 'Coder is allowed to edit apps/** source files');
+
+    // 4. Whole-file read of 250-line file is denied; bounded read (L1-L50) is allowed once, then denied on duplicate read
+    const wholeRead = evaluatePreToolUse(
+      {
+        conversationId: sdlcConvId,
+        stepIdx: 10,
+        workspacePaths: [tmpWorkspace],
+        toolCall: { name: 'read_file', args: { Path: bigFileRel } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(wholeRead.decision, 'deny', 'Whole-file read > 200 lines must be denied');
+    assert.ok(wholeRead.reason.includes('bv outline'), 'Denial reason names bv outline');
+
+    const boundedRead1 = evaluatePreToolUse(
+      {
+        conversationId: sdlcConvId,
+        stepIdx: 11,
+        workspacePaths: [tmpWorkspace],
+        toolCall: { name: 'read_file', args: { Path: bigFileRel, StartLine: 1, EndLine: 50 } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(boundedRead1.decision, 'allow', 'First bounded read <= 200 lines is allowed');
+
+    const boundedRead2 = evaluatePreToolUse(
+      {
+        conversationId: sdlcConvId,
+        stepIdx: 12,
+        workspacePaths: [tmpWorkspace],
+        toolCall: { name: 'view_file', args: { AbsolutePath: bigFileFull, StartLine: 1, EndLine: 50 } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(boundedRead2.decision, 'deny', 'Second identical file+range read must be denied as duplicate');
+    assert.ok(boundedRead2.reason.includes('Already read at step 11'));
+
+    // 5. Polling / non-bv commands in CODE phase are denied with exact bv replacement
+    const pnpmTest = evaluatePreToolUse(
+      {
+        conversationId: sdlcConvId,
+        workspacePaths: [tmpWorkspace],
+        toolCall: { name: 'run_command', args: { CommandLine: 'pnpm test' } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(pnpmTest.decision, 'deny');
+    assert.strictEqual(pnpmTest.reason, 'Use: bv gate-green');
+
+    const sleepPoll = evaluatePreToolUse(
+      {
+        conversationId: sdlcConvId,
+        workspacePaths: [tmpWorkspace],
+        toolCall: { name: 'run_command', args: { CommandLine: 'sleep 5' } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(sleepPoll.decision, 'deny');
+    assert.ok(sleepPoll.reason.includes('is prohibited'));
+
+    // 6. PreInvocation budget warning at >= 60% of maxTurns (60 * 0.6 = 36)
+    const preInvEarly = evaluatePreInvocation(
+      { conversationId: sdlcConvId, workspacePaths: [tmpWorkspace], invocationNum: 10 },
+      tmpWorkspace
+    );
+    assert.deepStrictEqual(preInvEarly, {}, 'Below 60% maxTurns returns {} (0 tokens)');
+
+    const preInvLate = evaluatePreInvocation(
+      { conversationId: sdlcConvId, workspacePaths: [tmpWorkspace], invocationNum: 36 },
+      tmpWorkspace
+    );
+    assert.ok(
+      preInvLate.injectSteps?.[0]?.ephemeralMessage?.includes('Turn budget warning (36/60)'),
+      'At >= 60% maxTurns injects ephemeral warning'
+    );
+
+    // 7. Stop hook continues when ledger.green is null on NO_TOOL_CALL, but never blocks on USER_CANCELED
+    const stopCanceled = evaluateStop(
+      { conversationId: sdlcConvId, workspacePaths: [tmpWorkspace], terminationReason: 'USER_CANCELED' },
+      tmpWorkspace
+    );
+    assert.deepStrictEqual(stopCanceled, {}, 'Stop never blocks on USER_CANCELED');
+
+    const stopPremature = evaluateStop(
+      { conversationId: sdlcConvId, workspacePaths: [tmpWorkspace], terminationReason: 'NO_TOOL_CALL' },
+      tmpWorkspace
+    );
+    assert.strictEqual(stopPremature.decision, 'continue', 'Stop continues when ledger:green exit condition is unmet');
+    assert.ok(stopPremature.reason.includes('bv gate-green'));
+
+    // 8. BV_HOOKS=off human kill switch bypasses all hooks
+    process.env.BV_HOOKS = 'off';
+    try {
+      const killSwitchRes = evaluatePreToolUse(
+        {
+          conversationId: sdlcConvId,
+          workspacePaths: [tmpWorkspace],
+          toolCall: { name: 'run_command', args: { CommandLine: 'ssh linode' } }
+        },
+        tmpWorkspace
+      );
+      assert.strictEqual(killSwitchRes.decision, 'allow', 'BV_HOOKS=off bypasses hook enforcement');
+    } finally {
+      delete process.env.BV_HOOKS;
+    }
+  });
+});

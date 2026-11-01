@@ -1,0 +1,4 @@
+rootDirs:
+  - .
+ruleDirs:
+  - rules/ast-grep

@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["completed", "blocked", "failed"]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "filesModified": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exitVerb": {
+      "type": "string"
+    }
+  },
+  "required": ["status", "summary", "filesModified", "exitVerb"],
+  "additionalProperties": false
+}
