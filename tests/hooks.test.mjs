@@ -8,7 +8,8 @@ import {
   evaluatePreToolUse,
   evaluatePostToolUse,
   evaluatePreInvocation,
-  evaluateStop
+  evaluateStop,
+  checkTurnBudget
 } from '../lib/hooks.mjs';
 import { computeFileBlobHash } from '../lib/core.mjs';
 
@@ -327,5 +328,191 @@ describe('agent-sdlc-kit Hook Enforcement & TDD Unit Suite', () => {
     } finally {
       delete process.env.BV_HOOKS;
     }
+  });
+
+  it('Hook Scoping & Single-Exit Lifecycle: protects root orchestrator and locks completed subagents', () => {
+    const orchestratorConvId = 'root-orchestrator-conv-101';
+    const subagentConvId = 'subagent-coder-conv-101';
+    const issueNum = 101;
+
+    // Activate issue 101 with orchestrator and subagent recorded
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', 'ACTIVE_ISSUE'),
+      JSON.stringify({
+        issue: issueNum,
+        orchestratorConversationId: orchestratorConvId,
+        activeConversationId: subagentConvId,
+        phase: 'code'
+      }),
+      'utf8'
+    );
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', `ISSUE-${issueNum}.json`),
+      JSON.stringify({
+        issue: issueNum,
+        id: 'ISSUE-101',
+        branch: 'feature/issue-101',
+        phase: 'code',
+        orchestratorConversationId: orchestratorConvId,
+        activeConversationId: subagentConvId,
+        attempts: {},
+        red: { tests: ['verify-issue-101.test.mjs'] },
+        green: null,
+        comments: {}
+      }),
+      'utf8'
+    );
+
+    // 1. Root orchestrator NEVER receives turn budget warning at high turn count
+    const orchPreInv = checkTurnBudget(
+      {
+        conversationId: orchestratorConvId,
+        workspacePaths: [tmpWorkspace],
+        invocationNum: 50,
+        lastUserInput: 'orchestrate issue 101'
+      },
+      tmpWorkspace
+    );
+    assert.deepStrictEqual(orchPreInv, {}, 'Root orchestrator must never receive turn budget warnings');
+
+    // 2. Subagent DOES receive turn budget warning at >= 60% of maxTurns (60 * 0.6 = 36)
+    const subPreInv = checkTurnBudget(
+      {
+        conversationId: subagentConvId,
+        workspacePaths: [tmpWorkspace],
+        invocationNum: 36,
+        lastUserInput: 'ISSUE-101 phase=code implement feature'
+      },
+      tmpWorkspace
+    );
+    assert.ok(
+      subPreInv.injectSteps?.[0]?.ephemeralMessage?.includes('Turn budget warning (36/60)'),
+      'Subagent must receive turn budget warning'
+    );
+
+    // 3. Root orchestrator Stop NEVER blocked on NO_TOOL_CALL even when phase exit is unmet
+    const orchStop = evaluateStop(
+      {
+        conversationId: orchestratorConvId,
+        workspacePaths: [tmpWorkspace],
+        terminationReason: 'NO_TOOL_CALL',
+        lastUserInput: 'orchestrate issue 101'
+      },
+      tmpWorkspace
+    );
+    assert.deepStrictEqual(orchStop, {}, 'Root orchestrator Stop must never block or return continue decision');
+
+    // 4. Subagent Stop DOES return continue when phase exit condition is unmet
+    const subStop = evaluateStop(
+      {
+        conversationId: subagentConvId,
+        workspacePaths: [tmpWorkspace],
+        terminationReason: 'NO_TOOL_CALL',
+        lastUserInput: 'ISSUE-101 phase=code'
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(subStop.decision, 'continue', 'Subagent Stop continues when exit condition is unmet');
+
+    // 5. Single-Exit Subagent Guard:
+    // Mark exit verb (green) satisfied and post green comment
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', `ISSUE-${issueNum}.json`),
+      JSON.stringify({
+        issue: issueNum,
+        id: 'ISSUE-101',
+        branch: 'feature/issue-101',
+        phase: 'code',
+        orchestratorConversationId: orchestratorConvId,
+        activeConversationId: subagentConvId,
+        attempts: {},
+        red: { tests: ['verify-issue-101.test.mjs'] },
+        green: { tests: ['verify-issue-101.test.mjs'], durationMs: 120 },
+        comments: { coder: { postedAt: new Date().toISOString() } }
+      }),
+      'utf8'
+    );
+
+    // Subsequent chat prompt to this subagent session must be blocked with terminate behavior
+    const blockedPrompt = evaluatePreInvocation(
+      {
+        conversationId: subagentConvId,
+        workspacePaths: [tmpWorkspace],
+        invocationNum: 1,
+        lastUserInput: 'Can you also fix this other thing?'
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(blockedPrompt.terminationBehavior, 'terminate', 'Subagent chat prompt after exit must terminate');
+    assert.ok(
+      blockedPrompt.injectSteps?.[0]?.errorMessage?.userMessage?.includes('BLOCKED'),
+      'ErrorMessage explains single-exit lifecycle block'
+    );
+
+    // Tool call in completed subagent session is denied
+    const blockedTool = evaluatePreToolUse(
+      {
+        conversationId: subagentConvId,
+        workspacePaths: [tmpWorkspace],
+        lastUserInput: 'ISSUE-101 phase=code',
+        toolCall: { name: 'run_command', args: { CommandLine: 'bv gate-green' } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(blockedTool.decision, 'deny', 'Tool call in completed subagent session must be denied');
+    assert.ok(blockedTool.reason.includes('SINGLE-EXIT LOCK'), 'Denial reason notes SINGLE-EXIT LOCK');
+  });
+
+  it('Planner Role & Plan Phase: allows plan packet write, denies source file edits', () => {
+    const planConvId = 'subagent-planner-conv-102';
+    const issueNum = 102;
+    const planPacketRel = `.bv/packets/ISSUE-${issueNum}/plan.md`;
+    const srcFileRel = 'apps/backend/src/big.service.ts';
+
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', 'ACTIVE_ISSUE'),
+      JSON.stringify({
+        issue: issueNum,
+        activeConversationId: planConvId,
+        phase: 'plan'
+      }),
+      'utf8'
+    );
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', `ISSUE-${issueNum}.json`),
+      JSON.stringify({
+        issue: issueNum,
+        id: 'ISSUE-102',
+        branch: 'feature/issue-102',
+        phase: 'plan',
+        activeConversationId: planConvId,
+        attempts: {}
+      }),
+      'utf8'
+    );
+
+    // Planner can write plan packet
+    const planWrite = evaluatePreToolUse(
+      {
+        conversationId: planConvId,
+        workspacePaths: [tmpWorkspace],
+        lastUserInput: 'ISSUE-102 phase=plan',
+        toolCall: { name: 'write_file', args: { Path: planPacketRel } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(planWrite.decision, 'allow', 'Planner is allowed to write plan.md');
+
+    // Planner cannot edit source files
+    const srcWrite = evaluatePreToolUse(
+      {
+        conversationId: planConvId,
+        workspacePaths: [tmpWorkspace],
+        lastUserInput: 'ISSUE-102 phase=plan',
+        toolCall: { name: 'write_file', args: { Path: srcFileRel } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(srcWrite.decision, 'deny', 'Planner is forbidden from modifying source files');
   });
 });

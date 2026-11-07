@@ -19,6 +19,16 @@ Portable Antigravity CLI (`agy`) plugin enforcing a deterministic-first software
 - `tests/hooks.test.mjs` — Automated hook & TDD enforcement unit test suite
 
 ## Per-Repo Adoption
-1. Add `.agents/sdlc.config.json` to your repository.
-2. Run `bv doctor` to verify context budgets (`GEMINI.md` <= 40 lines, subagents <= 20 lines), hooks, zero `.env` files, and CLI tools.
-3. Run `bv run-issue <n>` (or step through `bv start-issue <n>`, `bv set-phase`, `bv verify`, `bv ship`).
+21. Add `.agents/sdlc.config.json` to your repository.
+22. Run `bv doctor` to verify context budgets (`GEMINI.md` <= 40 lines, subagents <= 20 lines), hooks, zero `.env` files, and CLI tools.
+23. Run `bv run-issue <n>` (or step through `bv start-issue <n>`, `bv set-phase`, `bv verify`, `bv ship`).
+
+## Living Domain Suites & Issue Script Lifecycle
+- **3-Phase Issue Script Lifecycle**:
+  - `RED` phase: Temporal acceptance script (`verify-issue-<N>.test.mjs`) authored and locked.
+  - `CODE` phase: Implementation satisfies acceptance test; core domain invariants are promoted into living domain test suites (`apps/backend/src/**/*.spec.ts`).
+  - `SHIP` / post-merge: Script archival and retirement from the active verification matrix.
+- **Living Test Suite Taxonomy**:
+  - **Category A (Living Domain Truth)**: Permanent active domain assertions executed on every verify pass.
+  - **Category B (SUPERSEDED / Retired)**: Historical scripts overridden by newer product specifications (e.g., `verify-issue-055.test.mjs`), excluded from active verification via `SUPERSEDED_TEST_SCRIPTS` to eliminate mock shims.
+  - **Category C (Integration / Smoke)**: Standalone integration and runtime emulator tests.

@@ -1,6 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { parseIssueMarkdown } from '../lib/verbs.mjs';
+import { generatePhasePacket } from '../lib/packets.mjs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 describe('agent-sdlc-kit Verbs & AC Parser Unit Suite', () => {
   it('extracts checkbox acceptance criteria when present', () => {
@@ -46,5 +50,27 @@ Please modify \`apps/spirit/src/components/CajaView.tsx\` and \`apps/backend/src
     const res = parseIssueMarkdown('Target Files Test', body);
     assert.ok(res.targetFiles.includes('apps/spirit/src/components/CajaView.tsx'));
     assert.ok(res.targetFiles.includes('apps/backend/src/main.ts'));
+  });
+
+  it('scaffolds plan phase packet with Section 1 (ACs) and Section 2 (Architecture)', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'bv-packet-test-'));
+    try {
+      const packet = await generatePhasePacket({
+        ctx: { bvDir: tmp, codeDir: tmp },
+        ledger: { issue: 83, id: 'ISSUE-083' },
+        phase: 'plan',
+        issueData: {
+          title: 'Unified Plan Phase',
+          acceptanceCriteria: ['AC-1: Black-Box AC', 'AC-2: Deterministic verification'],
+          targetFiles: ['apps/backend/src/main.ts']
+        }
+      });
+      assert.ok(packet.content.includes('# PLAN Phase Packet: ISSUE-083 (#83)'));
+      assert.ok(packet.content.includes('## Section 1: Black-Box Acceptance Criteria'));
+      assert.ok(packet.content.includes('## Section 2: White-Box Technical Blueprint'));
+      assert.ok(packet.content.includes('AC-1: Black-Box AC'));
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

@@ -42,36 +42,28 @@ Never skip phases. Always invoke subagents in the following exact order:
 
 ```mermaid
 flowchart LR
-    Start([User Request]) --> Product["1. product\n(spec.md)"]
-    Product --> Architect["2. architect\n(architecture.md)"]
-    Architect --> QA["3. qa\n(write-red)"]
-    QA --> Coder["4. coder\n(gate-green)"]
-    Coder --> Reviewer["5. reviewer\n(review-static)"]
-    Reviewer --> Ship["6. bv ship\n& watch-ci"]
+    Start([User Request]) --> Planner["1. planner\n(plan.md)"]
+    Planner --> QA["2. qa\n(write-red)"]
+    QA --> Coder["3. coder\n(gate-green)"]
+    Coder --> Reviewer["4. reviewer\n(review-static)"]
+    Reviewer --> Ship["5. bv ship\n& watch-ci"]
     Ship --> Done([Close Issue])
 ```
 
-### Phase 1: Product (`product` subagent)
-- **Role:** Product Manager / Spec Writer.
-- **Task:** Formulate clear scope, non-goals, and unambiguous Acceptance Criteria (ACs).
-- **Packet:** `.bv/packets/ISSUE-<id>/spec.md`
-- **Action:** Transition phase with `bv set-phase spec`, invoke `product` subagent, and publish the spec comment:
+### Phase 1: Planning (`planner` subagent)
+- **Role:** Systems Architect & Product Planner.
+- **Task:** Unify scope and technical architecture into `.bv/packets/ISSUE-<id>/plan.md` with:
+  - **Section 1: Black-Box Acceptance Criteria** (falsifiable expected outputs).
+  - **Section 2: White-Box Technical Blueprint** (affected modules, APIs, route/proxy changes, architectural constraints).
+- **Packet:** `.bv/packets/ISSUE-<id>/plan.md`
+- **Action:** Transition phase with `bv set-phase plan`, invoke `planner` subagent, and publish the plan comment:
   ```bash
-  bv post-comment spec
+  bv post-comment plan
   ```
 
-### Phase 2: Architecture (`architect` subagent)
-- **Role:** Technical Architect.
-- **Task:** Formulate technical design, component boundaries, dependency changes, and architectural constraints.
-- **Packet:** `.bv/packets/ISSUE-<id>/architecture.md`
-- **Action:** Transition phase with `bv set-phase architecture`, invoke `architect` subagent, and publish the architecture comment:
-  ```bash
-  bv post-comment architecture
-  ```
-
-### Phase 3: QA Acceptance (`qa` subagent)
+### Phase 2: QA Acceptance (`qa` subagent)
 - **Role:** QA Acceptance Engineer.
-- **Task:** Author failing (RED) acceptance tests based strictly on the spec's ACs.
+- **Task:** Author failing (RED) acceptance tests based strictly on `plan.md` Section 1 ACs.
 - **Constraint:** Must NEVER edit `apps/**` or `packages/**` source code.
 - **Packet:** `.bv/packets/ISSUE-<id>/red.md`
 - **Locking:** Author tests and lock with `bv write-red <test-file>`.
@@ -80,7 +72,7 @@ flowchart LR
   bv post-comment red
   ```
 
-### Phase 4: Implementation (`coder` subagent)
+### Phase 3: Implementation (`coder` subagent)
 - **Role:** Full-Stack Developer.
 - **Task:** Implement minimal, clean code changes under `apps/**` and `packages/**` to turn the locked RED tests green.
 - **Constraint:** Must NEVER modify locked RED test files, `scripts/**`, or `.agents/**`.
@@ -91,7 +83,7 @@ flowchart LR
   bv post-comment green
   ```
 
-### Phase 5: Audit & Static Review (`reviewer` subagent)
+### Phase 4: Audit & Static Review (`reviewer` subagent)
 - **Role:** Code Reviewer.
 - **Task:** Audit branch diff against architecture rules, code hygiene, and style guidelines.
 - **Packet:** `.bv/packets/ISSUE-<id>/review.md`

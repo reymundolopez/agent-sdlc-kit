@@ -8,7 +8,16 @@
       "id": "intake",
       "mode": "deterministic",
       "verbs": ["start-issue", "read-issue", "read-slice"],
-      "exit": "file:.bv/packets/${ISSUE}/red.md"
+      "exit": "file:.bv/packets/${ISSUE}/plan.md"
+    },
+    {
+      "id": "plan",
+      "mode": "llm",
+      "role": "planner",
+      "model": "flash",
+      "verbs": ["search", "outline", "read-slice", "post-comment"],
+      "maxTurns": 20,
+      "exit": "file:.bv/packets/${ISSUE}/plan.md"
     },
     {
       "id": "red",
@@ -48,6 +57,12 @@
     }
   ],
   "optionalLlmPhases": {
+    "plan": {
+      "role": "planner",
+      "model": "flash",
+      "maxTurns": 20,
+      "exit": "file:.bv/packets/${ISSUE}/plan.md"
+    },
     "spec": {
       "role": "product",
       "model": "flash",

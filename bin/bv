@@ -40,7 +40,9 @@ import {
   cmdLedger,
   cmdDoctor,
   cmdTelemetryReport,
-  cmdRunIssue
+  cmdRunIssue,
+  cmdTriage,
+  cmdRetro
 } from '../lib/verbs.mjs';
 import {
   readStdinJson,
@@ -191,6 +193,12 @@ try {
       break;
     case 'doctor':
       await cmdDoctor(ctx);
+      break;
+    case 'triage':
+      await cmdTriage(ctx, restArgs);
+      break;
+    case 'retro':
+      await cmdRetro(ctx, restArgs);
       break;
     case 'telemetry-report':
       await cmdTelemetryReport(ctx);
