@@ -330,6 +330,35 @@ describe('agent-sdlc-kit Hook Enforcement & TDD Unit Suite', () => {
     }
   });
 
+  it('Read Guard: same step replayed by a duplicated hook is not a duplicate; SessionStart resets the guard', () => {
+    const convId = 'sdlc-conv-99';
+    const rel = 'apps/backend/src/guard-replay.ts';
+    writeFileSync(join(tmpWorkspace, rel), 'export const replay = 1;\n', 'utf8');
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', 'ACTIVE_ISSUE'),
+      JSON.stringify({ issue: 99, activeConversationId: convId, phase: 'code' }),
+      'utf8'
+    );
+    const read = stepIdx =>
+      evaluatePreToolUse(
+        {
+          conversationId: convId,
+          stepIdx,
+          workspacePaths: [tmpWorkspace],
+          toolCall: { name: 'read_file', args: { Path: rel, StartLine: 1, EndLine: 1 } }
+        },
+        tmpWorkspace
+      );
+
+    assert.strictEqual(read(300).decision, 'allow', 'first read allowed');
+    assert.strictEqual(read(300).decision, 'allow', 'same step replayed (hook registered twice) is allowed');
+    assert.strictEqual(read(301).decision, 'deny', 'a later identical read is still a duplicate');
+
+    evaluateSessionStart({ conversationId: convId, workspacePaths: [tmpWorkspace] }, tmpWorkspace);
+    assert.strictEqual(read(302).decision, 'allow', 'after SessionStart the guard is reset for this conversation');
+    assert.strictEqual(read(303).decision, 'deny', 'duplicates are caught again after the reset');
+  });
+
   it('Hook Scoping & Single-Exit Lifecycle: protects root orchestrator and locks completed subagents', () => {
     const orchestratorConvId = 'root-orchestrator-conv-101';
     const subagentConvId = 'subagent-coder-conv-101';
