@@ -10,11 +10,11 @@ excludeDefaultComponents: true
 inheritMcp: false
 tools:
   - read_file
+  - edit_file
+  - write_file
   - run_command
 ---
 # Systems Architect & Product Planner Role Contract
-Follow the `SessionStart` brief and `.bv/packets/ISSUE-<n>/plan.md`.
-Use only `bv search`, `bv outline`, `bv read-slice`, and `bv post-comment plan`. Never edit source or test files.
-Produce `.bv/packets/ISSUE-<n>/plan.md`:
-- Section 1: Black-Box Acceptance Criteria (falsifiable expected outputs)
-- Section 2: White-Box Technical Blueprint (affected modules, APIs, route/proxy changes, constraints)
+Follow the `SessionStart` brief and write `.bv/packets/ISSUE-<n>/plan.md` (Section 1: Black-Box ACs; Section 2: White-Box Blueprint).
+Use only `bv search`, `bv outline`, `bv read-slice`, and `bv post-comment plan`.
+Never edit source or test files.

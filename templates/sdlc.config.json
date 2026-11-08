@@ -63,18 +63,6 @@
       "maxTurns": 20,
       "exit": "file:.bv/packets/${ISSUE}/plan.md"
     },
-    "spec": {
-      "role": "product",
-      "model": "flash",
-      "maxTurns": 15,
-      "exit": "comment:product"
-    },
-    "design": {
-      "role": "architect",
-      "model": "flash",
-      "maxTurns": 20,
-      "exit": "file:.context/blueprints/${ID}.md"
-    },
     "deepReview": {
       "role": "reviewer",
       "model": "flash",

@@ -515,4 +515,97 @@ describe('agent-sdlc-kit Hook Enforcement & TDD Unit Suite', () => {
     );
     assert.strictEqual(srcWrite.decision, 'deny', 'Planner is forbidden from modifying source files');
   });
+
+  it('Orchestrator Wakeup After Subagent Completion: root orchestrator is never blocked by PreInvocation after planner completes', () => {
+    const orchConvId = '9e0d840d-dd19-4352-9637-dd0973c47081';
+    const plannerConvId = 'e611ed0a-a02e-436a-8b05-2cfb8ee61f2c';
+    const issueNum = 84;
+    const planDir = join(tmpWorkspace, '.bv', 'packets', `ISSUE-${issueNum}`);
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(join(planDir, 'plan.md'), '# PLAN Phase Packet: ISSUE-084\n', 'utf8');
+
+    // Simulate state right after planner finished `bv post-comment plan` (even if orchestratorConversationId was not in initial ledger)
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', 'ACTIVE_ISSUE'),
+      JSON.stringify({
+        issue: issueNum,
+        id: 'ISSUE-084',
+        branch: 'feature/issue-084-user-feedback-session-3',
+        phase: 'plan',
+        activeConversationId: null
+      }),
+      'utf8'
+    );
+    writeFileSync(
+      join(tmpWorkspace, '.bv', 'state', `ISSUE-${issueNum}.json`),
+      JSON.stringify({
+        issue: issueNum,
+        id: 'ISSUE-084',
+        branch: 'feature/issue-084-user-feedback-session-3',
+        phase: 'plan',
+        activeConversationId: null,
+        comments: { plan: { postedAt: new Date().toISOString() } },
+        completedPhases: { plan: { completedAt: new Date().toISOString(), conversationId: null } }
+      }),
+      'utf8'
+    );
+
+    // 1. Orchestrator invoked subagent (PostToolUse records orchestratorConversationId)
+    evaluatePostToolUse(
+      {
+        conversationId: orchConvId,
+        workspacePaths: [tmpWorkspace],
+        lastUserInput: 'Orchestrate #84',
+        toolCall: { name: 'invoke_subagent', args: { TypeName: 'planner' } }
+      },
+      tmpWorkspace
+    );
+
+    // 2. Planner subagent runs post-comment plan (PostToolUse records plannerConvId in activeConversationId & completedConversations)
+    evaluatePostToolUse(
+      {
+        conversationId: plannerConvId,
+        workspacePaths: [tmpWorkspace],
+        lastUserInput: 'You are the `planner` subagent for GitHub Issue #84.',
+        toolCall: { name: 'run_command', args: { CommandLine: 'bv post-comment plan' } }
+      },
+      tmpWorkspace
+    );
+
+    // 3. Planner subagent IS blocked from subsequent chat turns
+    const subWakeup = evaluatePreInvocation(
+      {
+        conversationId: plannerConvId,
+        workspacePaths: [tmpWorkspace],
+        invocationNum: 15,
+        lastUserInput: 'Another prompt to planner'
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(subWakeup.terminationBehavior, 'terminate', 'Completed planner subagent must be terminated on subsequent turns');
+
+    // 4. Root orchestrator wakes up on subagent report message and MUST NOT be blocked
+    const orchWakeup = evaluatePreInvocation(
+      {
+        conversationId: orchConvId,
+        workspacePaths: [tmpWorkspace],
+        invocationNum: 5,
+        lastUserInput: '# Planner Phase Report: ISSUE-084 (#84)\nThe plan phase packet has been generated.'
+      },
+      tmpWorkspace
+    );
+    assert.deepStrictEqual(orchWakeup, {}, 'Root orchestrator wakeup must never be blocked after subagent completes phase');
+
+    // 5. Root orchestrator can transition phase to red
+    const orchSetPhase = evaluatePreToolUse(
+      {
+        conversationId: orchConvId,
+        workspacePaths: [tmpWorkspace],
+        lastUserInput: '# Planner Phase Report: ISSUE-084 (#84)',
+        toolCall: { name: 'run_command', args: { CommandLine: 'bv set-phase red' } }
+      },
+      tmpWorkspace
+    );
+    assert.strictEqual(orchSetPhase.decision, 'allow', 'Root orchestrator is allowed to run bv set-phase red');
+  });
 });

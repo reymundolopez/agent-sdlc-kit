@@ -130,5 +130,5 @@ Once review is approved:
 
 If the user requests fully automated or headless execution:
 ```bash
-bv run-issue <id> --with-spec --with-design --deep-review
+bv run-issue <id> --deep-review
 ```
