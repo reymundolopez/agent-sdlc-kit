@@ -19,9 +19,10 @@ Portable Antigravity CLI (`agy`) plugin enforcing a deterministic-first software
 - `tests/hooks.test.mjs` — Automated hook & TDD enforcement unit test suite
 
 ## Per-Repo Adoption
-21. Add `.agents/sdlc.config.json` to your repository.
-22. Run `bv doctor` to verify context budgets (`GEMINI.md` <= 40 lines, subagents <= 20 lines), hooks, zero `.env` files, and CLI tools.
-23. Run `bv run-issue <n>` (or step through `bv start-issue <n>`, `bv set-phase`, `bv verify`, `bv ship`).
+1. Install the kit **once** as a plugin (hooks, skills and agents come from the plugin only). For kit development, symlink the plugin dir to your checkout: `ln -s <checkout> ~/.gemini/config/plugins/agent-sdlc-kit`.
+2. In each project run `bv init` (idempotent; writes only `.agents/sdlc.config.json`, `.bv/{state,packets,logs}` and a `.bv/` `.gitignore` entry; `--force` replaces the config). It refuses if a local `.agents/hooks.json` registers the kit (`--allow-local-hooks` to override).
+3. Run `bv doctor`: it fails if the kit is registered more than once (double hook firing) and warns on `.agents/{agents,skills}` files that shadow the kit's.
+4. Run `bv run-issue <n>` (or step through `bv start-issue <n>`, `bv set-phase`, `bv verify`, `bv ship`).
 
 ## Living Domain Suites & Issue Script Lifecycle
 - **3-Phase Issue Script Lifecycle**:

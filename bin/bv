@@ -42,7 +42,8 @@ import {
   cmdTelemetryReport,
   cmdRunIssue,
   cmdTriage,
-  cmdRetro
+  cmdRetro,
+  cmdInit
 } from '../lib/verbs.mjs';
 import {
   readStdinJson,
@@ -90,6 +91,11 @@ if (verb === 'hook') {
 
 if (restArgs.includes('--help') || restArgs.includes('-h')) {
   printVerbHelp(verb);
+}
+
+if (verb === 'init') {
+  await cmdInit(restArgs);
+  process.exit(0);
 }
 
 const ctx = resolveContext(process.cwd());
