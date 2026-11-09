@@ -34,7 +34,7 @@
       "role": "coder",
       "model": "flash",
       "verbs": ["search", "outline", "read-slice", "gate-green", "check-scope", "lint-types"],
-      "maxTurns": 60,
+      "maxTurns": 50,
       "exit": "ledger:green"
     },
     {
