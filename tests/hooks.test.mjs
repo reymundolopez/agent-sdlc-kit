@@ -283,7 +283,7 @@ describe('agent-sdlc-kit Hook Enforcement & TDD Unit Suite', () => {
     assert.strictEqual(sleepPoll.decision, 'deny');
     assert.ok(sleepPoll.reason.includes('is prohibited'));
 
-    // 6. PreInvocation budget warning at >= 60% of maxTurns (60 * 0.6 = 36)
+    // 6. PreInvocation budget warning at >= 60% of maxTurns (50 * 0.6 = 30)
     const preInvEarly = evaluatePreInvocation(
       { conversationId: sdlcConvId, workspacePaths: [tmpWorkspace], invocationNum: 10 },
       tmpWorkspace
@@ -295,7 +295,7 @@ describe('agent-sdlc-kit Hook Enforcement & TDD Unit Suite', () => {
       tmpWorkspace
     );
     assert.ok(
-      preInvLate.injectSteps?.[0]?.ephemeralMessage?.includes('Turn budget warning (36/60)'),
+      preInvLate.injectSteps?.[0]?.ephemeralMessage?.includes('Turn budget warning (36/50)'),
       'At >= 60% maxTurns injects ephemeral warning'
     );
 
@@ -415,7 +415,7 @@ describe('agent-sdlc-kit Hook Enforcement & TDD Unit Suite', () => {
       tmpWorkspace
     );
     assert.ok(
-      subPreInv.injectSteps?.[0]?.ephemeralMessage?.includes('Turn budget warning (36/60)'),
+      subPreInv.injectSteps?.[0]?.ephemeralMessage?.includes('Turn budget warning (36/50)'),
       'Subagent must receive turn budget warning'
     );
 
