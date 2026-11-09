@@ -14,7 +14,7 @@ tools:
   - write_file
   - run_command
 ---
-# Systems Architect & Product Planner Role Contract
-Follow the `SessionStart` brief and write `.bv/packets/ISSUE-<n>/plan.md` (Section 1: Black-Box ACs; Section 2: White-Box Blueprint).
-Use only `bv search`, `bv outline`, `bv read-slice`, and `bv post-comment plan`.
-Never edit source or test files.
+# Systems Architect & Product Planner Role Contract (Budget <= 20 turns)
+Follow SessionStart; write .bv/packets/ISSUE-<n>/plan.md (Sec 1: ACs, Sec 2: Blueprint).
+Batch AST reads with `bv read-slice` & `bv outline`; NO single-file micro-reads.
+Run `bv post-comment plan`. Never edit source or test files.

@@ -85,3 +85,30 @@ describe('bv init', () => {
     assert.strictEqual(run(d, '--allow-local-hooks').status, 0);
   });
 });
+
+describe('bv doctor --fix', () => {
+  const runDoctor = (cwd, pluginsDir, ...args) => spawnSync('node', [BV, 'doctor', ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, BV_HOOKS: 'off', BV_PLUGINS_DIR: pluginsDir }
+  });
+
+  it('prunes duplicate project hooks and shadowed files when --fix is passed', () => {
+    const d = tmp();
+    const pluginsDir = pluginWith(d);
+    mkdirSync(join(d, '.agents', 'skills', 'orchestrate-issue'), { recursive: true });
+    writeFileSync(join(d, '.agents', 'skills', 'orchestrate-issue', 'SKILL.md'), 'shadow');
+    writeFileSync(join(d, '.agents', 'hooks.json'), hooks(`${KIT}/scripts/hooks/session-start.mjs`));
+
+    // Without --fix: doctor fails due to duplicate hooks
+    const r1 = runDoctor(d, pluginsDir);
+    assert.strictEqual(r1.status, 2);
+    assert.match(r1.stdout, /Kit registered 2 times/);
+
+    // With --fix: cleans up duplicate project hook and shadowed files
+    const r2 = runDoctor(d, pluginsDir, '--fix');
+    assert.strictEqual(r2.status, 0, r2.stdout + r2.stderr);
+    assert.ok(!existsSync(join(d, '.agents', 'hooks.json')));
+    assert.ok(!existsSync(join(d, '.agents', 'skills', 'orchestrate-issue')));
+  });
+});

@@ -198,7 +198,7 @@ try {
       await cmdLedger(ctx, restArgs);
       break;
     case 'doctor':
-      await cmdDoctor(ctx);
+      await cmdDoctor(ctx, restArgs);
       break;
     case 'triage':
       await cmdTriage(ctx, restArgs);

@@ -14,7 +14,7 @@ tools:
   - write_file
   - run_command
 ---
-# Coder Role Contract
-Follow the `SessionStart` brief and `.bv/packets/ISSUE-<n>/code.md`.
-Use only `bv <verb>` commands (`bv read-slice`, `bv search`, `bv outline`, `bv gate-green`, `bv check-scope`, `bv lint-types`).
-Never edit locked test files.
+# Coder Role Contract (Budget <= 50 turns)
+Follow SessionStart; batch reads with `bv read-slice` (no micro-reads).
+Turn locked RED tests green with minimal edits; verify with `bv gate-green`.
+Never edit active locked tests, scripts/**, or .agents/**.

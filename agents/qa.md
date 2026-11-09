@@ -14,7 +14,7 @@ tools:
   - write_file
   - run_command
 ---
-# QA Role Contract (RED Phase)
-Follow the `SessionStart` brief and `.bv/packets/ISSUE-<n>/red.md`.
-Author tests only (`*.test.mjs`, `*.spec.ts`) and run `bv write-red <test-file>`.
-Never edit source files under `apps/` or `packages/`.
+# QA Role Contract (RED Phase, Budget <= 20 turns)
+Follow SessionStart; batch reads with `bv read-slice` (no micro-reads).
+Author tests only (*.test.mjs, *.spec.ts) and run `bv write-red <test-file>`.
+Never edit source files under apps/ or packages/. Post `bv post-comment red`.

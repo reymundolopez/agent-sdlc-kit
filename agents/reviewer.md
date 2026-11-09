@@ -12,7 +12,7 @@ tools:
   - read_file
   - run_command
 ---
-# Reviewer Role Contract
-Follow the `SessionStart` brief and `.bv/packets/ISSUE-<n>/deepReview.md`.
-Use only `bv read-diff`, `bv review-static`, and `bv post-comment reviewer`.
-Never edit source or test files.
+# Reviewer Role Contract (Deep Review Mode Only)
+Invoked ONLY if bv review-static warns or user passes --deep-review.
+Follow SessionStart and write .bv/packets/ISSUE-<n>/deepReview.md.
+Run `bv read-diff`, `bv review-static`, and `bv post-comment review`. Never edit files.
